@@ -51,21 +51,23 @@ ui <- fluidPage(
             # otherwise, renderText won't update until the end
             htmlOutput("progress_update"),
             h3("Response from chatGPT"),
-            wellPanel(verbatimTextOutput(outputId = "raw_response") %>% withSpinner(color = "#0dc5c1")),
+            # wellPanel(verbatimTextOutput(outputId = "raw_response") %>% withSpinner(color = "#0dc5c1")),
+            wellPanel(htmlOutput("raw_response")),
             h3("Table returned from database"),
+            "First 100 rows",
             wellPanel(
                 style = "padding: 20px 20px 1px 20px;
                 overflow-y:scroll;
                 overflow-x:scroll;
                 content: 'x';",
-                tableOutput("postgis_results") %>% withSpinner(color = "#0dc5c1")
+                tableOutput("postgis_results_always") %>% withSpinner(color = "#0dc5c1")
             )
         ),
 
         # Show a plot of the generated distribution
         mainPanel(
-            leafletOutput("basemap", height = "85vh") %>%
-                withSpinner(type = 7, color = "#024b6c")
+            # This is either a map or a table
+            uiOutput("condPanel") %>% withSpinner(color = "#0dc5c1")
         )
     )
 )
@@ -74,6 +76,7 @@ ui <- fluidPage(
 server <- function(input, output) {
     # This is going to keep track of progress messages
     messager <- reactiveValues(outputText = "")
+
 
     # Load all the gpt initial prompt with a button so it doesn't just load every
     # time I start the app
@@ -95,7 +98,9 @@ server <- function(input, output) {
         messager$outputText <- ""
         shinyjs::html(id = "progress_update", messager$outputText)
 
-        paste("Write an SQL Query (using PL/pgSQL for PostgreSQL syntax) that returns year, ca_core.geom, ca_species.* and all records that answers the following question:",
+        paste(
+            # "Write an SQL Query (using PL/pgSQL for PostgreSQL syntax) that returns year, ca_core.geom, ca_species.* and all records that answers the following question:",
+            "Write an SQL Query (using PL/pgSQL for PostgreSQL syntax) that returns all columns and all records that answers the following question:",
             input$userquery,
             "Limit to 500 records. Return only the SQL query with no explanation or other text.",
             collapse = " "
@@ -124,36 +129,66 @@ server <- function(input, output) {
         }
     })
 
-    # Show chatGPT response in sidebar
-    output$raw_response <- renderText({
-        req(chatGPT_response())
-        print(chatGPT_response())
-        chatGPT_response()
+    # # Show chatGPT response in sidebar
+    # output$raw_response <- renderText({
+    #     req(chatGPT_response())
+    #     print(chatGPT_response())
+    #     chatGPT_response()
+    # })
+    # Try it a different way
+    gpt_query <- reactiveValues(outputText = "")
+    observe({
+        gpt_query$outputText <- chatGPT_response() %>% str_replace_all("\n", "<br>")
+        shinyjs::html(id = "raw_response", gpt_query$outputText)
     })
 
     # Query observations from the postGIS database
     observations.sf <- eventReactive(chatGPT_response(), {
-        # shinyjs::html(id = "progress_update", "Querying the database...")
         messager$outputText <- paste0(messager$outputText, "Querying the database...", "<br>")
         shinyjs::html(id = "progress_update", messager$outputText)
 
-        try(result <- con %>% st_read(query = chatGPT_response()))
+        # try(result <- con %>% st_read(query = chatGPT_response()))
+        # This is not st_read() anymore so that we can separate out the other geom columns
+        try(result <- con %>% dbGetQuery(chatGPT_response()))
 
+        # If it doesn't exist just stop here
         if (!exists("result")) {
             messager$outputText <- paste0(messager$outputText, "Database query failed", "<br>")
             shinyjs::html(id = "progress_update", messager$outputText)
             return()
         }
 
-        if ("sf" %in% class(result)) { # & nrow(result) > 0
-            prepped_result <- result %>%
-                # Warning! This is to make it so even if it's a huge query it still
-                # maps
-                slice_sample(n = 1000)
-            return(prepped_result)
+        # If the result has more than two columns named 'geom',
+        # then we probably just want species points. So lets separate the columns
+        # out and then slap the one back on that's a POINT geometry
+        if (names(result) %>% str_detect("geom") %>% sum() == 2) {
+            renamed <- result %>%
+                rename(geom1 = "geom", geom2 = "geom") %>%
+                as_tibble(.name_repair = "minimal")
+            geom1.sf <- renamed %>%
+                select(geom) %>%
+                mutate(geom = st_as_sfc(structure(geom, class = "WKB"), EWKB = TRUE))
+            geom2.sf <- renamed %>%
+                select(geom2) %>%
+                mutate(geom = st_as_sfc(structure(geom2, class = "WKB"), EWKB = TRUE)) %>%
+                select(geom)
+
+            renamed_clean <- result %>% select(-contains("geom"))
+
+            # Slap on the geometry that is composed of points
+            if ("POINT" %in% unique(st_geometry_type(geom1.sf$geom))) {
+                fixed_df <- bind_cols(renamed_clean, geom1.sf) %>% st_as_sf()
+            } else {
+                fixed_df <- bind_cols(renamed_clean, geom2.sf) %>% st_as_sf()
+            }
+
+            return(fixed_df)
         } else {
-            print("Not ")
-            return()
+            result_singlegeom <- result %>%
+                mutate(geom = st_as_sfc(structure(geom, class = "WKB"), EWKB = TRUE)) %>%
+                as_tibble(.name_repair = "minimal") %>%
+                st_as_sf()
+            return(result_singlegeom)
         }
     })
 
@@ -164,7 +199,17 @@ server <- function(input, output) {
         observations.sf() %>%
             tibble() %>%
             select(-contains("geom")) %>%
-            head()
+            slice_head(n = 100)
+    })
+
+    # Put a sample of the postgis table in the sidebar
+    output$postgis_results_always <- renderTable({
+        req(observations.sf())
+        # print("heres the table!")
+        observations.sf() %>%
+            tibble() %>%
+            select(-contains("geom")) %>%
+            slice_head(n = 100)
     })
 
     # Now map!
@@ -176,10 +221,19 @@ server <- function(input, output) {
     })
 
     observeEvent(observations.sf(), {
-        # Make sure they are just POINT geometries
-        observation_pts.sf <- observations.sf()[st_geometry_type(observations.sf()) == "POINT", ]
+        # If it's not spatial then don't map
+        if (!"sf" %in% class(observations.sf())) {
+            print("Not spatial")
+            return()
+        }
+
+        observations.sf <- observations.sf() %>%
+            # Warning! This is to make it so even if it's a huge query it still
+            # maps
+            slice_sample(n = 1000)
+
         # Get bounding box for zoom
-        bbox <- observation_pts.sf %>%
+        bbox <- observations.sf %>%
             st_bbox() %>%
             as.vector()
 
@@ -187,13 +241,39 @@ server <- function(input, output) {
             clearShapes() %>%
             clearControls() %>%
             addCircles(
-                data = observation_pts.sf,
+                data = observations.sf[st_geometry_type(observations.sf) == "POINT", ],
                 # color = ~pal(count),
                 # fillColor = ~pal(count),
                 fillOpacity = .8,
-                radius = 1
+                radius = 1,
+                popup = ~ sprintf(
+                    "<b>Species:<br>
+                           </b> %s <br>
+                           <b>Year:</b> %s <br>",
+                    species,
+                    year
+                )
             ) %>%
+            addPolygons(data = observations.sf[st_geometry_type(observations.sf) != "POINT", ]) %>%
             fitBounds(bbox[1], bbox[2], bbox[3], bbox[4])
+    })
+
+
+    # This is some weird hacky thing to replace the map with the table if there's
+    # no spatial data
+    output$condPanel <- renderUI({
+        if (!"sf" %in% class(observations.sf())) {
+            wellPanel(
+                style = "padding: 20px 20px 1px 20px;
+                overflow-y:scroll;
+                overflow-x:scroll;
+                content: 'x';",
+                tableOutput("postgis_results") %>% withSpinner(color = "#0dc5c1")
+            )
+        } else {
+            leafletOutput("basemap", height = "85vh") %>%
+                withSpinner(type = 7, color = "#024b6c")
+        }
     })
 }
 
@@ -204,4 +284,4 @@ onStop(function() {
 })
 
 # Run the application
-shinyApp(ui = ui, server = server)
+shinyApp(ui = ui, server = server, options = list(launch.browser = T))
