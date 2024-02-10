@@ -45,6 +45,7 @@ Indexes:
 Referenced by:
 	TABLE "ca_core" CONSTRAINT "ca_core_taxonkey_fkey" FOREIGN KEY (taxonkey) REFERENCES ca_species(taxonkey)
 *Note: Taxonomic information is always stored in scientific taxonomic nomenclature. Always translate common names to scientific names before building a query.
+*Note: the "species" column contains scientific binomial nomenclature, so both genus and species should always be included when querying from the "species" column.
 
 Table "ca_layers"
   Column  |        	Type         	| Collation | Nullable |            	Default
