@@ -7,9 +7,9 @@ I've been working on building a local postgis database to hold biodiversity data
 The result here is a proof-of-concept, that ended up surprising me with how well it works after about a week of development
 
 # Demo
-[![IMAGE ALT TEXT](http://img.youtube.com/vi/zK9ZWllSGEI/0.jpg)](http://www.youtube.com/watch?v=zK9ZWllSGEI "Video Title")
+[![IMAGE ALT TEXT](http://img.youtube.com/vi/zK9ZWllSGEI/0.jpg)](http://www.youtube.com/watch?v=zK9ZWllSGEI "Video")
 
-Unfortunately because I have this spun up on a private network I don't have a demo that we can actually mess around with. 
+Unfortunately because I have this spun up on a private network I don't have a demo that we can actually mess around with. But click the above for a video demo.
 
 # Why I'm excited
 This is able to produce results for somewhat complex questions about biodiversity data using natural language, that would take a significant amount of time for people that do not have a local GBIF database of all CA records and do not know SQL. A year ago it would have taken me a significant amount of time to answer the question: which county in CA has the most records of [*Darlingtonia californica*](https://en.wikipedia.org/wiki/Darlingtonia_californica)? With this it takes the time to write out the prompt + the few minutes of waiting while the database query runs.
