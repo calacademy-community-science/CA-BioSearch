@@ -8,7 +8,6 @@
 #
 
 library(shiny)
-# library(TheOpenAIR)
 library(chatgpt)
 library(RPostgreSQL)
 library(shinycssloaders)
@@ -41,7 +40,7 @@ ui <- fluidPage(
                 inputId = "userquery",
                 label = "Write a question!",
                 value = "",
-                placeholder = 'Where are all the records of "Pinus ponderosa" species in the counties of "San Francisco", "Napa", and "Sonoma" in the years since 1999?',
+                placeholder = 'Where are all the birds in San Francisco?',
                 width = "100%",
                 rows = 4
             ),
