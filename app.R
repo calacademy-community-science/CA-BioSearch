@@ -201,44 +201,6 @@ server <- function(input, output) {
             return()
         }
         
-        
-        # # If the result has more than two columns named 'geom',
-        # # then we probably just want species points. So lets separate the columns
-        # # out and then slap the one back on that's a POINT geometry
-        # if (names(result) %>% str_detect("geom") %>% sum() > 1) {
-        #     
-        #     # This gives all duplicate columns unique names
-        #     renamed <- result %>% tibble(.name_repair = "unique")
-        #     
-        #     # Convert all 'geom' columns to sf geometry
-        #     geoms.df <- renamed %>% 
-        #         select(geom=contains("geom")) %>% 
-        #         mutate(across(contains("geom"), 
-        #                       ~ st_as_sfc(structure(.x, class = "WKB"), 
-        #                                   EWKB = TRUE)))
-        # 
-        #     renamed_clean <- renamed %>% select(-contains("geom"))
-        #     
-        #     return(renamed_clean)
-        # } else if(names(result) %>% str_detect("geom") %>% sum() == 1){
-        #     
-        #     # Otherwise just return the object with as an sf
-        #     result_singlegeom <- result %>%
-        #         as_tibble(.name_repair = "unique") %>%
-        #         # This makes sure that if there isn't geom, it doesn't break
-        #         mutate(across(contains("geom"), 
-        #                       ~ st_as_sfc(structure(.x, class = "WKB"), 
-        #                                   EWKB = TRUE)))
-        #     
-        #     return(result_singlegeom)
-        # } else {
-        #     # No geometry column
-        #     result_nogeom <- result %>%
-        #         as_tibble(.name_repair = "unique")
-        #         
-        #     return(result_nogeom)
-        # }
-        
         messager$outputText <- paste0(messager$outputText, 
                                       "Query operation complete.", "<br>")
         shinyjs::html(id = "progress_update", messager$outputText)
