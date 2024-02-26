@@ -111,7 +111,7 @@ server <- function(input, output) {
         source("gpt-initial-prompt.R")
         messager$outputText <- paste0(messager$outputText, "ChatGPT Ready!", "<br>")
         shinyjs::html(id = "progress_update", messager$outputText)
-
+        
     })
     
     
@@ -149,7 +149,7 @@ server <- function(input, output) {
     
     # Submit full query to chatGPT
     chatGPT_response <- eventReactive(full_query(), {
-
+        
         messager$outputText <- paste0(messager$outputText, "Sending query to chatGPT...", "<br>")
         shinyjs::html(id = "progress_update", messager$outputText)
         
@@ -166,7 +166,7 @@ server <- function(input, output) {
                 str_extract("SELECT([^;]+);")
         }
     })
-
+    
     gpt_query <- reactiveValues(outputText = "")
     observe({
         gpt_query$outputText <- chatGPT_response() %>% str_replace_all("\n", "<br>")
@@ -174,7 +174,7 @@ server <- function(input, output) {
     })
     
     # Query observations from the postGIS database
-    observations.sf <- eventReactive(chatGPT_response(), {
+    observations.df <- eventReactive(chatGPT_response(), {
         
         # Update htmloutput to show progress
         messager$outputText <- paste0(messager$outputText, "Querying the database...", "<br>")
@@ -191,53 +191,53 @@ server <- function(input, output) {
             return()
         }
         
-        # If the result has more than two columns named 'geom',
-        # then we probably just want species points. So lets separate the columns
-        # out and then slap the one back on that's a POINT geometry
-        if (names(result) %>% str_detect("geom") %>% sum() == 2) {
-            
-            # This gives all duplicate columns unique names
-            renamed <- result %>% tibble(.name_repair = "unique")
-            
-            # Convert all 'geom' columns to sf geometry
-            geoms.df <- renamed %>% 
-                select(geom=contains("geom")) %>% 
-                mutate(across(contains("geom"), 
-                              ~ st_as_sfc(structure(.x, class = "WKB"), 
-                                          EWKB = TRUE)))
+        names_repaired <- result %>%
+            as_tibble(.name_repair = "unique")
         
-            renamed_clean <- renamed %>% select(-contains("geom"))
-            
-            # Weed out non-point geometry
-            point_geom.df <- geoms.df %>% mutate(across(contains("geom"), 
-                                       ~ if(all(st_geometry_type(.) == "POINT")) 
-                                           . else NA_real_)) %>% 
-                # This works because turning the whole column NA makes it double
-                select_if(~!is.double(.))
-            
-            # Slap on the geometry that is composed of points
-            fixed_df <- renamed_clean %>% bind_cols(point_geom.df) %>% st_as_sf()
-            
-            return(fixed_df)
-        } else if(names(result) %>% str_detect("geom") %>% sum() == 1){
-            
-            # Otherwise just return the object with as an sf
-            result_singlegeom <- result %>%
-                as_tibble(.name_repair = "unique") %>%
-                # This makes sure that if there isn't geom, it doesn't break
-                mutate(across(contains("geom"), 
-                              ~ st_as_sfc(structure(.x, class = "WKB"), 
-                                          EWKB = TRUE))) %>% 
-                st_as_sf()
-            
-            return(result_singlegeom)
+        if(nrow(names_repaired) > 0){
+            return(names_repaired)
         } else {
-            # No geometry column
-            result_nogeom <- result %>%
-                as_tibble(.name_repair = "unique")
-                
-            return(result_nogeom)
+            print("no data")
+            return()
         }
+        
+        
+        # # If the result has more than two columns named 'geom',
+        # # then we probably just want species points. So lets separate the columns
+        # # out and then slap the one back on that's a POINT geometry
+        # if (names(result) %>% str_detect("geom") %>% sum() > 1) {
+        #     
+        #     # This gives all duplicate columns unique names
+        #     renamed <- result %>% tibble(.name_repair = "unique")
+        #     
+        #     # Convert all 'geom' columns to sf geometry
+        #     geoms.df <- renamed %>% 
+        #         select(geom=contains("geom")) %>% 
+        #         mutate(across(contains("geom"), 
+        #                       ~ st_as_sfc(structure(.x, class = "WKB"), 
+        #                                   EWKB = TRUE)))
+        # 
+        #     renamed_clean <- renamed %>% select(-contains("geom"))
+        #     
+        #     return(renamed_clean)
+        # } else if(names(result) %>% str_detect("geom") %>% sum() == 1){
+        #     
+        #     # Otherwise just return the object with as an sf
+        #     result_singlegeom <- result %>%
+        #         as_tibble(.name_repair = "unique") %>%
+        #         # This makes sure that if there isn't geom, it doesn't break
+        #         mutate(across(contains("geom"), 
+        #                       ~ st_as_sfc(structure(.x, class = "WKB"), 
+        #                                   EWKB = TRUE)))
+        #     
+        #     return(result_singlegeom)
+        # } else {
+        #     # No geometry column
+        #     result_nogeom <- result %>%
+        #         as_tibble(.name_repair = "unique")
+        #         
+        #     return(result_nogeom)
+        # }
         
         messager$outputText <- paste0(messager$outputText, 
                                       "Query operation complete.", "<br>")
@@ -246,9 +246,9 @@ server <- function(input, output) {
     
     # Put The table in the main part if there's no map
     output$postgis_results <- renderTable({
-        req(observations.sf())
+        req(observations.df())
         
-        observations.sf() %>%
+        observations.df() %>%
             tibble() %>%
             select(-contains("geom")) %>%
             slice_head(n = 100)
@@ -256,9 +256,9 @@ server <- function(input, output) {
     
     # Put a sample of the postgis table in the sidebar
     output$postgis_results_always <- renderTable({
-        req(observations.sf())
+        req(observations.df())
         # print("heres the table!")
-        observations.sf() %>%
+        observations.df() %>%
             tibble() %>%
             select(-contains("geom")) %>%
             slice_head(n = 100)
@@ -272,23 +272,78 @@ server <- function(input, output) {
             fitBounds(-124.24, 32.5, -114.8, 42)
     })
     
-    observeEvent(observations.sf(), {
+    observeEvent(observations.df(), {
         print("Mapping...")
         # If it's not spatial then don't map
-        if (!"sf" %in% class(observations.sf())) {
+        # if (!"sf" %in% class(observations.df())) {
+        if(names(observations.df()) %>% str_detect("geom") %>% sum() == 0){
             print("Not spatial")
             shinyjs::show(id = "table_div")
             leafletProxy("basemap") %>% clearShapes()
             return()
         }
         
-        observations.sf <- observations.sf() %>%
+        observations.sf <- observations.df() %>%
             # Warning! This is to make it so even if it's a huge query it still
             # maps
-            slice_sample(n = 1000)
+            slice_sample(n = 1000) %>% 
+            mutate(across(contains("geom"),
+                          ~ st_as_sfc(structure(.x, class = "WKB"),
+                                      EWKB = TRUE)))
+        
+        ## Now make tables for each particular geometry. This is pretty messed
+        # up but I think it works !! TODO
+        
+        # POINT geom
+        point_obs.sf <- observations.sf %>% 
+            mutate(across(contains("geom"), 
+                          ~ if(all(st_geometry_type(.) == "POINT"))
+                              . else NA_real_)) %>% 
+            filter(if_any(contains("geom"), ~  !is.na(.)))
+        
+        if(nrow(point_obs.sf) > 0) {
+            print("point!")
+            point_obs.sf <- point_obs.sf %>% st_as_sf()
+        } else {
+            # Empty geometry
+            point_obs.sf <- st_sf(st_sfc())
+        }
+        
+        # LINE geom
+        line_obs.sf <- observations.sf %>% 
+            mutate(across(contains("geom"), 
+                          ~ if(all(st_geometry_type(.) == "LINESTRING"))
+                              . else NA_real_)) %>% 
+            filter(if_any(contains("geom"), ~  !is.na(.)))
+        
+        if(nrow(line_obs.sf) > 0) {
+            print("line!")
+            line_obs.sf <- line_obs.sf %>% st_as_sf()
+        } else {
+            line_obs.sf <- st_sf(st_sfc())
+        }
+        
+        # POLYGON geom
+        poly_obs.sf <- observations.sf %>% 
+            mutate(across(contains("geom"), 
+                          ~ if(all(st_geometry_type(.) %in% c("POLYGON", "MULTIPOLGYON")))
+                              . else NA_real_)) %>% 
+            filter(if_any(contains("geom"), ~  !is.na(.)))
+        
+        if(nrow(poly_obs.sf) > 0) {
+            print("polygon!")
+            poly_obs.sf <- poly_obs.sf %>% st_as_sf(sf_column_name = "geom", na.fail = F)
+        }  else {
+            poly_obs.sf <- st_sf(st_sfc())
+        }
+        
+        # Just get a random valid geom of these for the bounding box
+        spatial_list <- list(line_obs.sf, poly_obs.sf, point_obs.sf)
+        spatial_item <- (spatial_list[sapply(spatial_list, function(x) inherits(x, "sf") & nrow(x) > 0)] %>% 
+                             sample(size = 1))[[1]]
         
         # Get bounding box for zoom
-        bbox <- observations.sf %>%
+        bbox <- spatial_item %>%
             st_bbox() %>%
             as.vector()
         
@@ -300,7 +355,7 @@ server <- function(input, output) {
                 clearShapes() %>%
                 clearControls() %>%
                 addCircles(
-                    data = observations.sf[st_geometry_type(observations.sf) == "POINT", ],
+                    data = point_obs.sf,
                     fillOpacity = .8,
                     radius = 1,
                     # need to make sure that the data has these columns
@@ -312,7 +367,8 @@ server <- function(input, output) {
                         year
                     )
                 ) %>%
-                addPolygons(data = observations.sf[st_geometry_type(observations.sf) != "POINT", ]) %>%
+                addPolygons(data = poly_obs.sf) %>%
+                addPolylines(data = line_obs.sf) %>% 
                 fitBounds(bbox[1], bbox[2], bbox[3], bbox[4])
             
         } else {
@@ -322,11 +378,12 @@ server <- function(input, output) {
                 clearShapes() %>%
                 clearControls() %>%
                 addCircles(
-                    data = observations.sf[st_geometry_type(observations.sf) == "POINT", ],
+                    data = point_obs.sf,
                     fillOpacity = .8,
                     radius = 1,
                 ) %>%
-                addPolygons(data = observations.sf[st_geometry_type(observations.sf) != "POINT", ]) %>%
+                addPolygons(data = poly_obs.sf) %>%
+                addPolylines(data = line_obs.sf) %>% 
                 fitBounds(bbox[1], bbox[2], bbox[3], bbox[4])
         }
         
@@ -334,7 +391,7 @@ server <- function(input, output) {
     
     
     # Download button
-    observeEvent(observations.sf(), {
+    observeEvent(observations.df(), {
         print("show")
         shinyjs::show("download1")
     })
@@ -345,7 +402,7 @@ server <- function(input, output) {
             paste0("query_results", ".csv")
         },
         content = function(file) {
-            write.csv(observations.sf(), file)
+            write.csv(observations.df(), file)
         }
     )
 }
