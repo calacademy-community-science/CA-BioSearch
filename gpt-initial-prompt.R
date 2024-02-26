@@ -75,5 +75,23 @@ Indexes:
 Foreign-key constraints:
 	"ca_crosswalks_countyid_fkey" FOREIGN KEY (countyid) REFERENCES ca_layers(id)
 	"ca_crosswalks_gap30x30id_fkey" FOREIGN KEY (gap30x30id) REFERENCES ca_layers(id)
-	"ca_pt_evt2_gbifid_fkey" FOREIGN KEY (gbifid) REFERENCES ca_core(gbifid)'
+	"ca_pt_evt2_gbifid_fkey" FOREIGN KEY (gbifid) REFERENCES ca_core(gbifid)
+    
+    
+Materialized view "cari_streams"
+Column   |   Type   | Collation | Nullable | Default 
+------------+----------+-----------+----------+---------
+    gid        | integer  |           |          | 
+    class      | text     |           |          | 
+    lastupdate | text     |           |          | 
+    source_dat | text     |           |          | 
+    label      | text     |           |          | 
+    cari_id    | integer  |           |          | 
+    geom       | geometry |           |          | 
+    Indexes:
+    "idx_stream_geom" gist (geom) 
+
+'
+    
+    
 )
