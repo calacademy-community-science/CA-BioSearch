@@ -75,5 +75,51 @@ Indexes:
 Foreign-key constraints:
 	"ca_crosswalks_countyid_fkey" FOREIGN KEY (countyid) REFERENCES ca_layers(id)
 	"ca_crosswalks_gap30x30id_fkey" FOREIGN KEY (gap30x30id) REFERENCES ca_layers(id)
-	"ca_pt_evt2_gbifid_fkey" FOREIGN KEY (gbifid) REFERENCES ca_core(gbifid)'
+	"ca_pt_evt2_gbifid_fkey" FOREIGN KEY (gbifid) REFERENCES ca_core(gbifid)
+
+Table "zombie_forests"
+    Column     |   Type   | Collation | Nullable |                  Default                   
+---------------+----------+-----------+----------+--------------------------------------------
+ conifer_class | text     |           |          | 
+ geom          | geometry |           |          | 
+ id            | integer  |           | not null | 
+Indexes:
+    "zombie_forests_pkey" PRIMARY KEY, btree (id)
+    "idx_zff_geom" gist (geom)
+    "idx_zff_name" btree (conifer_class)
+*Note: the "conifer_class" column contains 4 values: NULL, "VCM", "VCM (Severe)", and "Stable Conifer Distribution". "VCM" is synonymous with "zombie forest" and the user may use this term to refer to both "VCM" AND "VCM (Severe)"
+
+    
+Materialized view "cari_streams"
+Column   |   Type   | Collation | Nullable | Default 
+------------+----------+-----------+----------+---------
+    class      | text     |           |          | 
+    lastupdate | text     |           |          | 
+    source_dat | text     |           |          | 
+    label      | text     |           |          | 
+    geom       | geometry |           |          | 
+    Indexes:
+    "idx_stream_geom" gist (geom) 
+
+'
+    
+    
 )
+
+# *Note: Only use this table if the ca_crosswalks table does not answer the prompt.
+# Table "ca_crosswalks"
+#    Column   |  Type   | Collation | Nullable | Default
+# ------------+---------+-----------+----------+---------
+#  gbifid 	| bigint  |       	|      	|
+#  cwhr_type  | text	|       	|      	|
+#  gap30x30id | integer |       	|      	|
+#  countyid   | integer |       	|      	|
+#  conifer_class | text    |           |          | 
+# Indexes:
+# 	"idx_crosswalk_cwhr" btree (cwhr_type)
+# Foreign-key constraints:
+# 	"ca_crosswalks_countyid_fkey" FOREIGN KEY (countyid) REFERENCES ca_layers(id)
+# 	"ca_crosswalks_gap30x30id_fkey" FOREIGN KEY (gap30x30id) REFERENCES ca_layers(id)
+# 	"ca_pt_evt2_gbifid_fkey" FOREIGN KEY (gbifid) REFERENCES ca_core(gbifid)
+# *Note: the "conifer_class" column contains 4 values: NULL, "VCM", "VCM (Severe)", and "Stable Conifer Distribution". "VCM" is synonymous with "zombie forest" and the user may use this term to refer to both "VCM" AND "VCM (Severe)"
+# *Note: Do not use this table for spatial queries of zombie forest, VCM, or conifer_class data
