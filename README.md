@@ -12,7 +12,7 @@ The result here is a proof-of-concept, that ended up surprising me with how well
 Unfortunately because I have this spun up on a private network I don't have a demo that we can actually mess around with. But click the above for a video demo.
 
 # Why I'm excited
-This is able to produce results for somewhat complex questions about biodiversity data using natural language, that would take a significant amount of time for people that do not have a local GBIF database of all CA records and do not know SQL. A year ago it would have taken me a significant amount of time to answer the question: which county in CA has the most records of [*Darlingtonia californica*](https://en.wikipedia.org/wiki/Darlingtonia_californica)? With this it takes the time to write out the prompt + the few minutes of waiting while the database query runs.
+This is able to produce results for somewhat complex questions about biodiversity data using natural language, that would take a significant amount of time for people that do not have a local GBIF database of all CA records and do not know SQL. A year ago it would have taken me a significant amount of time to answer the question: which county in CA has the most records of [*Darlingtonia californica*](https://en.wikipedia.org/wiki/Darlingtonia_californica)? With this it takes the time to write out the prompt | the few minutes of waiting while the database query runs.
 
 The webapp is able to generate complex SQL queries using relatively little information about the tables (see below). To me, this suggests that there is little overhead to adding additional data to the database. Conceivably, if I wanted to add a wildfire perimeter dataset like [FRAP](https://www.fire.ca.gov/what-we-do/fire-resource-assessment-program) I would add a new table to the postgis database, add the table description to the initial chatGPT prompt, and run from there (and probably adding a few notes to the initial prompt as it tries the first few queries). This presents a number of opportunities for exploring complex relationships between biodiversity and environmental data that I would have had a hard time imagining before learning SQL.
 
@@ -69,3 +69,20 @@ Column        |  Type   | Collation | Nullable | Default
  cwhr_type  | text	  |       	  |      	   |
  gap30x30id | integer |       	  |      	   |
  countyid   | integer |       	  |      	   |
+
+### zombie_forests Table
+Column     |   Type   | Collation | Nullable |
+---------------|----------|-----------|----------|
+ conifer_class | text     |           |          | 
+ geom          | geometry |           |          | 
+ id            | integer  |           | not null | 
+
+### CARI streams Table
+
+Column   |   Type   | Collation | Nullable | Default
+------------|----------|-----------|----------|---------
+class      | text     |           |          | 
+lastupdate | text     |           |          | 
+source_dat | text     |           |          | 
+label      | text     |           |          | 
+geom       | geometry |           |          | 
