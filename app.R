@@ -45,7 +45,7 @@ ui <- fluidPage(
                 width = "100%",
                 rows = 4
             ),
-            HTML("Refer to <a href='https://github.com/calacademy-community-science/CA-BioSearch#Tables'>this link</a> for information about the project and the data sources (tables) that are currently available."),
+            HTML("Refer to <a href='https://github.com/calacademy-community-science/CA-BioSearch#Tables' target='_blank'>this link</a> for information about the project and the data sources (tables) that are currently available."),
             br(),
             actionButton(inputId = "submitquery", label = "Submit Query"),
             actionButton(inputId = "startGPT", label = "Start chatGPT"),
